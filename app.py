@@ -1,6 +1,9 @@
 import os
 from keras.models import load_model
 import gdown
+from PIL import Image
+import pandas as pd
+
 
 MODEL_PATH = "traffic_sign_model.h5"
 url = "https://drive.google.com/file/d/1I5QMX2hgGvIEKcHbqHFZ31R5XjE1Sr5c"
