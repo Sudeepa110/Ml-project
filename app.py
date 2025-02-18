@@ -11,26 +11,25 @@ MODEL_PATH = "traffic_sign_model.h5"
 url = "https://drive.google.com/uc?id=1I5QMX2hgGvIEKcHbqHFZ31R5XjE1Sr5c"
 
 def download_model_file():
-    # Download the model file if it doesn't exist or if it's suspiciously small
+    # Download if file doesn't exist or is suspiciously small (<100KB)
     if not os.path.exists(MODEL_PATH) or os.stat(MODEL_PATH).st_size < 100 * 1024:
         st.write("Downloading model file...")
         gdown.download(url, MODEL_PATH, fuzzy=True, quiet=False)
     else:
         st.write("Model file already exists.")
 
-    # Check if the file exists after download
+    # Verify the file exists
     if not os.path.exists(MODEL_PATH):
         st.error("Model file was not downloaded.")
         return False
 
-    # Check the file header to verify it's a valid HDF5 file
+    # Check the file header (HDF5 files should start with b'\x89HDF\r\n\x1a\n')
     try:
         with open(MODEL_PATH, 'rb') as f:
             header = f.read(8)
-            # HDF5 files start with: b'\x89HDF\r\n\x1a\n'
-            if header != b'\x89HDF\r\n\x1a\n':
-                st.error("Downloaded file does not appear to be a valid HDF5 file. It may be an HTML error page or corrupted.")
-                return False
+        if header != b'\x89HDF\r\n\x1a\n':
+            st.error("Downloaded file is not a valid HDF5 file. It may be an HTML error page or corrupted.")
+            return False
     except Exception as e:
         st.error(f"Error reading model file: {e}")
         return False
@@ -41,7 +40,7 @@ def download_model_file():
 if not download_model_file():
     st.stop()  # Stop execution if the file is invalid
 
-# Cache the model loading so it's loaded only once
+# Cache the model so that it's loaded only once
 @st.cache_resource
 def load_traffic_sign_model():
     try:
@@ -60,8 +59,8 @@ def preprocess_image(image):
     image = image.resize((32, 32))
     if image.mode != "RGB":
         image = image.convert("RGB")
-    image_array = np.array(image) / 255.0
-    processed_image = np.expand_dims(image_array, axis=0)
+    image_array = np.array(image) / 255.0  # Normalize to [0, 1]
+    processed_image = np.expand_dims(image_array, axis=0)  # Shape (1, 32, 32, 3)
     return processed_image
 
 def predict_traffic_sign(image):
@@ -90,10 +89,9 @@ st.title("Traffic Sign Classifier")
 st.write("Upload a traffic sign image, and the model will classify it.")
 
 uploaded_image = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
-
 if uploaded_image is not None:
     image = Image.open(uploaded_image)
-    st.image(image, caption="Uploaded Image", use_column_width=True)
+    st.image(image, caption="Uploaded Image", use_container_width=True)
     if st.button("Predict"):
         class_id, confidence = predict_traffic_sign(image)
         if class_id is not None and sign_names is not None:
