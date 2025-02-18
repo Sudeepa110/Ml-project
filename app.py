@@ -1,40 +1,47 @@
 import os
 import gdown
+import streamlit as st
 from keras.models import load_model
 from PIL import Image
 import pandas as pd
-import streamlit as st
 import numpy as np
-import h5py  # For checking HDF5 validity
 
 MODEL_PATH = "traffic_sign_model.h5"
-# Convert the share link to a direct download link if needed:
+# Use a direct download URL for Google Drive:
 url = "https://drive.google.com/uc?id=1I5QMX2hgGvIEKcHbqHFZ31R5XjE1Sr5c"
 
 def download_model_file():
-    # Check if file exists and has a reasonable size (e.g., more than 100KB)
+    # Download the model file if it doesn't exist or if it's suspiciously small
     if not os.path.exists(MODEL_PATH) or os.stat(MODEL_PATH).st_size < 100 * 1024:
         st.write("Downloading model file...")
         gdown.download(url, MODEL_PATH, fuzzy=True, quiet=False)
     else:
         st.write("Model file already exists.")
-        
-    # Check file size after download
-    file_size = os.stat(MODEL_PATH).st_size
-    st.write(f"Model file size: {file_size / 1024:.2f} KB")
-    
-    # Try opening with h5py to verify it is a valid HDF5 file
+
+    # Check if the file exists after download
+    if not os.path.exists(MODEL_PATH):
+        st.error("Model file was not downloaded.")
+        return False
+
+    # Check the file header to verify it's a valid HDF5 file
     try:
-        with h5py.File(MODEL_PATH, 'r') as f:
-            st.write("Model file verified as a valid HDF5 file.")
+        with open(MODEL_PATH, 'rb') as f:
+            header = f.read(8)
+            # HDF5 files start with: b'\x89HDF\r\n\x1a\n'
+            if header != b'\x89HDF\r\n\x1a\n':
+                st.error("Downloaded file does not appear to be a valid HDF5 file. It may be an HTML error page or corrupted.")
+                return False
     except Exception as e:
-        st.error(f"Model file appears corrupted or is not a valid HDF5 file: {e}")
-        raise
+        st.error(f"Error reading model file: {e}")
+        return False
 
-# Download (or verify) the model file first
-download_model_file()
+    st.write("Model file verified as a valid HDF5 file.")
+    return True
 
-# Cache the model loading so that it's loaded only once
+if not download_model_file():
+    st.stop()  # Stop execution if the file is invalid
+
+# Cache the model loading so it's loaded only once
 @st.cache_resource
 def load_traffic_sign_model():
     try:
@@ -47,24 +54,22 @@ def load_traffic_sign_model():
 
 def preprocess_image(image):
     """
-    Preprocess the input image to match the model's input shape:
-      - Resize to 32x32
-      - Ensure 3 color channels (RGB)
-      - Normalize pixel values
+    Resize to 32x32, convert to RGB if needed, normalize pixel values,
+    and add a batch dimension.
     """
     image = image.resize((32, 32))
     if image.mode != "RGB":
         image = image.convert("RGB")
-    image_array = np.array(image) / 255.0  # Normalize
-    processed_image = np.expand_dims(image_array, axis=0)  # Add batch dimension
+    image_array = np.array(image) / 255.0
+    processed_image = np.expand_dims(image_array, axis=0)
     return processed_image
 
 def predict_traffic_sign(image):
     """
-    Predict the traffic sign class and confidence.
+    Preprocess the image, load the cached model, and make a prediction.
     """
     processed_image = preprocess_image(image)
-    model = load_traffic_sign_model()  # Load model on demand (cached)
+    model = load_traffic_sign_model()
     if model is None:
         st.error("Model is not loaded.")
         return None, None
@@ -73,7 +78,7 @@ def predict_traffic_sign(image):
     confidence = np.max(predictions)
     return class_id, confidence
 
-# Load the CSV containing sign names
+# Load CSV with sign names
 try:
     sign_names = pd.read_csv("signname.csv")
 except Exception as e:
