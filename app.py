@@ -1,4 +1,5 @@
 import os
+import time
 import gdown
 import streamlit as st
 from keras.models import load_model
@@ -7,59 +8,47 @@ import pandas as pd
 import numpy as np
 
 MODEL_PATH = "traffic_sign_model.h5"
-# Direct download URL for Google Drive (make sure your file is shared publicly)
+# Direct download URL for Google Drive (ensure your file is shared publicly)
 url = "https://drive.google.com/uc?id=1I5QMX2hgGvIEKcHbqHFZ31R5XjE1Sr5c"
 
-def download_model_file():
-    """Download the model file and verify it's a valid HDF5 file."""
-    st.write("Downloading model file...")
-    # Re-download the file (overwrite if exists)
-    gdown.download(url, MODEL_PATH, fuzzy=True, quiet=False)
-    
-    # Check if the file exists
-    if not os.path.exists(MODEL_PATH):
-        st.error("Model file was not downloaded.")
-        return False
+def download_model_if_needed():
+    """Download the model if it doesn't exist or if it's older than a certain interval."""
+    # For example, re-download if the file is older than 1 hour (3600 seconds)
+    reload_interval = 3600
+    if not os.path.exists(MODEL_PATH) or (time.time() - os.path.getmtime(MODEL_PATH)) > reload_interval:
+        st.write("Downloading model file...")
+        gdown.download(url, MODEL_PATH, fuzzy=True, quiet=False)
+    else:
+        st.write("Using cached model file.")
 
-    # Verify file header (HDF5 files should start with: b'\x89HDF\r\n\x1a\n')
+@st.cache_resource(show_spinner=False)
+def load_cached_model():
+    """Download (if needed) and load the model (this function is cached)."""
+    download_model_if_needed()
     try:
-        with open(MODEL_PATH, 'rb') as f:
-            header = f.read(8)
-        st.write(f"File header: {header}")
-        if header != b'\x89HDF\r\n\x1a\n':
-            st.error("Downloaded file is not a valid HDF5 file. It may be an HTML error page or corrupted.")
-            return False
+        model = load_model(MODEL_PATH)
+        st.write("Model loaded successfully!")
+        return model
     except Exception as e:
-        st.error(f"Error reading model file: {e}")
-        return False
-
-    st.write("Model file verified as a valid HDF5 file.")
-    return True
+        st.error(f"Error loading model: {e}")
+        return None
 
 def preprocess_image(image):
-    """Resize to 32x32, convert to RGB if needed, normalize pixel values, and add a batch dimension."""
+    """Resize image to 32x32, convert to RGB if needed, normalize pixel values, and add a batch dimension."""
     image = image.resize((32, 32))
     if image.mode != "RGB":
         image = image.convert("RGB")
-    image_array = np.array(image) / 255.0
+    image_array = np.array(image) / 255.0  # Normalize to [0, 1]
     processed_image = np.expand_dims(image_array, axis=0)
     return processed_image
 
 def predict_traffic_sign(image):
-    """Download the model, load it, preprocess the image, and perform a prediction."""
-    # Download and verify model file on each prediction
-    if not download_model_file():
-        st.error("Failed to download or verify the model file.")
-        return None, None
-
-    # Load the model (this will run on each prediction click)
-    try:
-        model = load_model(MODEL_PATH)
-    except Exception as e:
-        st.error(f"Error loading model: {e}")
-        return None, None
-
+    """Preprocess the image, load the cached model, and perform a prediction."""
     processed_image = preprocess_image(image)
+    model = load_cached_model()
+    if model is None:
+        st.error("Model is not loaded.")
+        return None, None
     predictions = model.predict(processed_image)
     class_id = np.argmax(predictions)
     confidence = np.max(predictions)
@@ -77,7 +66,6 @@ st.title("Traffic Sign Classifier")
 st.write("Upload a traffic sign image, and the model will classify it.")
 
 uploaded_image = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
-
 if uploaded_image is not None:
     image = Image.open(uploaded_image)
     st.image(image, caption="Uploaded Image", use_container_width=True)
