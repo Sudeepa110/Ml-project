@@ -6,16 +6,16 @@ from tensorflow.keras.models import load_model
 from PIL import Image
 import pandas as pd
 
-# Define model path and Google Drive URL (using the direct download link format)
+# Define model path and direct download URL for Google Drive
 MODEL_PATH = "traffic_sign_model.h5"
-url = "https://drive.google.com/uc?export=download&id=1I5QMX2hgGvIEKcHbqHFZ31R5XjE1Sr5c"
-
+url = "https://drive.google.com/uc?export=download&id=1I5QMX2hgGvIEKcHbqHFZ31R5XjE1Sr5c"  # Direct download link
 
 # Download the model if it doesn't exist locally
 if not os.path.exists(MODEL_PATH):
     st.write("Downloading model...")
     gdown.download(url, MODEL_PATH, fuzzy=True, quiet=False)
 
+# Verify the model file exists
 if not os.path.exists(MODEL_PATH):
     st.error(f"Model file not found at {MODEL_PATH}")
     st.stop()
