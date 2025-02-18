@@ -8,7 +8,8 @@ import pandas as pd
 
 # Define model path and Google Drive URL (using the direct download link format)
 MODEL_PATH = "traffic_sign_model.h5"
-url = "https://drive.google.com/uc?id=1I5QMX2hgGvIEKcHbqHFZ31R5XjE1Sr5c"
+ url = "https://drive.google.com/uc?export=download&id=1I5QMX2hgGvIEKcHbqHFZ31R5XjE1Sr5c"
+
 
 # Download the model if it doesn't exist locally
 if not os.path.exists(MODEL_PATH):
