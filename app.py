@@ -11,7 +11,7 @@ MODEL_PATH = "traffic_sign_model.h5"
 url = "https://drive.google.com/uc?id=1I5QMX2hgGvIEKcHbqHFZ31R5XjE1Sr5c"
 
 def download_model_file():
-    # Download if file doesn't exist or is suspiciously small (<100KB)
+    # Download if file doesn't exist or is too small (<100KB)
     if not os.path.exists(MODEL_PATH) or os.stat(MODEL_PATH).st_size < 100 * 1024:
         st.write("Downloading model file...")
         gdown.download(url, MODEL_PATH, fuzzy=True, quiet=False)
@@ -27,6 +27,7 @@ def download_model_file():
     try:
         with open(MODEL_PATH, 'rb') as f:
             header = f.read(8)
+        st.write(f"File header: {header}")
         if header != b'\x89HDF\r\n\x1a\n':
             st.error("Downloaded file is not a valid HDF5 file. It may be an HTML error page or corrupted.")
             return False
@@ -40,7 +41,7 @@ def download_model_file():
 if not download_model_file():
     st.stop()  # Stop execution if the file is invalid
 
-# Cache the model so that it's loaded only once
+# Cache the model so it's loaded only once
 @st.cache_resource
 def load_traffic_sign_model():
     try:
@@ -52,21 +53,14 @@ def load_traffic_sign_model():
         return None
 
 def preprocess_image(image):
-    """
-    Resize to 32x32, convert to RGB if needed, normalize pixel values,
-    and add a batch dimension.
-    """
     image = image.resize((32, 32))
     if image.mode != "RGB":
         image = image.convert("RGB")
-    image_array = np.array(image) / 255.0  # Normalize to [0, 1]
-    processed_image = np.expand_dims(image_array, axis=0)  # Shape (1, 32, 32, 3)
+    image_array = np.array(image) / 255.0
+    processed_image = np.expand_dims(image_array, axis=0)
     return processed_image
 
 def predict_traffic_sign(image):
-    """
-    Preprocess the image, load the cached model, and make a prediction.
-    """
     processed_image = preprocess_image(image)
     model = load_traffic_sign_model()
     if model is None:
