@@ -7,23 +7,21 @@ import pandas as pd
 import numpy as np
 
 MODEL_PATH = "traffic_sign_model.h5"
-# Use a direct download URL for Google Drive:
+# Direct download URL for Google Drive (make sure your file is shared publicly)
 url = "https://drive.google.com/uc?id=1I5QMX2hgGvIEKcHbqHFZ31R5XjE1Sr5c"
 
 def download_model_file():
-    # Download if file doesn't exist or is too small (<100KB)
-    if not os.path.exists(MODEL_PATH) or os.stat(MODEL_PATH).st_size < 100 * 1024:
-        st.write("Downloading model file...")
-        gdown.download(url, MODEL_PATH, fuzzy=True, quiet=False)
-    else:
-        st.write("Model file already exists.")
-
-    # Verify the file exists
+    """Download the model file and verify it's a valid HDF5 file."""
+    st.write("Downloading model file...")
+    # Re-download the file (overwrite if exists)
+    gdown.download(url, MODEL_PATH, fuzzy=True, quiet=False)
+    
+    # Check if the file exists
     if not os.path.exists(MODEL_PATH):
         st.error("Model file was not downloaded.")
         return False
 
-    # Check the file header (HDF5 files should start with b'\x89HDF\r\n\x1a\n')
+    # Verify file header (HDF5 files should start with: b'\x89HDF\r\n\x1a\n')
     try:
         with open(MODEL_PATH, 'rb') as f:
             header = f.read(8)
@@ -38,21 +36,8 @@ def download_model_file():
     st.write("Model file verified as a valid HDF5 file.")
     return True
 
-if not download_model_file():
-    st.stop()  # Stop execution if the file is invalid
-
-# Cache the model so it's loaded only once
-@st.cache_resource
-def load_traffic_sign_model():
-    try:
-        model = load_model(MODEL_PATH)
-        st.write("Model loaded successfully!")
-        return model
-    except Exception as e:
-        st.error(f"Error loading model: {e}")
-        return None
-
 def preprocess_image(image):
+    """Resize to 32x32, convert to RGB if needed, normalize pixel values, and add a batch dimension."""
     image = image.resize((32, 32))
     if image.mode != "RGB":
         image = image.convert("RGB")
@@ -61,11 +46,20 @@ def preprocess_image(image):
     return processed_image
 
 def predict_traffic_sign(image):
-    processed_image = preprocess_image(image)
-    model = load_traffic_sign_model()
-    if model is None:
-        st.error("Model is not loaded.")
+    """Download the model, load it, preprocess the image, and perform a prediction."""
+    # Download and verify model file on each prediction
+    if not download_model_file():
+        st.error("Failed to download or verify the model file.")
         return None, None
+
+    # Load the model (this will run on each prediction click)
+    try:
+        model = load_model(MODEL_PATH)
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
+        return None, None
+
+    processed_image = preprocess_image(image)
     predictions = model.predict(processed_image)
     class_id = np.argmax(predictions)
     confidence = np.max(predictions)
@@ -83,6 +77,7 @@ st.title("Traffic Sign Classifier")
 st.write("Upload a traffic sign image, and the model will classify it.")
 
 uploaded_image = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
+
 if uploaded_image is not None:
     image = Image.open(uploaded_image)
     st.image(image, caption="Uploaded Image", use_container_width=True)
